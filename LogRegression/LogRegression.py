@@ -48,6 +48,16 @@ class MyLogReg():
         if verbose:
             print(f"final | loss: {loss:.2f} | learning rate: {self.learning_rate}")
 
+    def predict_proba(self, X):
+        X = np.c_[np.ones(X.shape[0]), X]
+        y_hat = self.sigmoid(np.dot(X, self.weights))
+        return y_hat
+
+    def predict(self, X):
+        y_proba = self.predict_proba(X)
+        result = np.where(y_proba > 0.5, 1, 0)
+        return result
+
     def get_coef(self):
         return self.weights[1:]
 
@@ -68,3 +78,11 @@ print(model)
 model.fit(X, y, 10)
 
 print(model.get_coef())
+
+X_test, y_test = make_classification(n_samples=400, n_features=14, n_informative=10, random_state=42)
+X_test = pd.DataFrame(X_test)
+y_test = pd.Series(y_test)
+X_test.columns = [f'col_{col}' for col in X_test.columns]
+
+print("predict: ", model.predict(X_test))
+print("predict proba: ", model.predict_proba(X_test))

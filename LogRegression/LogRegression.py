@@ -84,7 +84,12 @@ class MyLogReg():
 
 
 
-        for i in range(self.n_iter):
+        for i in range(1, self.n_iter+1):
+            if callable(self.learning_rate):
+                lr = self.learning_rate(i)
+            else:
+                lr = self.learning_rate
+
             y_hat = self.sigmoid(np.dot(X, self.weights))
 
             loss = self.compute_log_loss(y, y_hat)
@@ -106,10 +111,10 @@ class MyLogReg():
             if verbose and (i % verbose == 0):
                 if self.metric is not None:
                     metric_value = self.compute_metric(y, y_hat)
-                    print(f"{i if i > 0 else 'start'} | loss: {total_loss:.2f} | learning rate: {self.learning_rate} | {self.metric}: {metric_value}")
+                    print(f"{i if i > 0 else 'start'} | loss: {total_loss:.2f} | learning rate: {lr:.6f} | {self.metric}: {metric_value}")
 
                 else:
-                    print(f"{i if i > 0 else 'start'} | loss: {total_loss:.2f} | learning rate: {self.learning_rate}")
+                    print(f"{i if i > 0 else 'start'} | loss: {total_loss:.2f} | learning rate: {lr:.6f}")
 
             error = y_hat - y
             gradient = np.dot(error, X) / len(y)
@@ -123,16 +128,16 @@ class MyLogReg():
                 elif self.reg == "elasticnet":
                     gradient += self.l1_coef * np.sign(self.weights) + 2 * self.l2_coef * self.weights
 
-            self.weights -= self.learning_rate * gradient
+            self.weights -= lr * gradient
 
         y_hat = self.sigmoid(np.dot(X, self.weights))
 
         if verbose:
             if self.metric is not None:
                 metric_value = self.compute_metric(y, y_hat)
-                print(f"final | loss: {total_loss:.2f} | learning rate: {self.learning_rate} | {self.metric}: {metric_value}")
+                print(f"final | loss: {total_loss:.2f} | learning rate: {lr:.6f} | {self.metric}: {metric_value}")
             else:
-                print(f"final | loss: {total_loss:.2f} | learning rate: {self.learning_rate}")
+                print(f"final | loss: {total_loss:.2f} | learning rate: {lr:.6f}")
 
         self.best_score = self.compute_metric(y, y_hat)
 
@@ -161,9 +166,10 @@ X = pd.DataFrame(X)
 y = pd.Series(y)
 X.columns = [f'col_{col}' for col in X.columns]
 
+lr_fuction = lambda iter: 0.5 * (0.85 ** iter)
 
 
-model = MyLogReg(n_iter=100, learning_rate=0.1, metric="roc_auc", reg="l1", l1_coef=.1, l2_coef=.1)
+model = MyLogReg(n_iter=100, learning_rate=lr_fuction, metric="roc_auc", reg="l1", l1_coef=.1, l2_coef=.1)
 
 print(model)
 

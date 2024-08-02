@@ -4,11 +4,14 @@ import pandas as pd
 
 class MyLogReg():
 
-    def __init__(self, n_iter=10, learning_rate=0.1, weights=None, metric=None):
+    def __init__(self, n_iter=10, learning_rate=0.1, weights=None, metric=None, reg=None, l1_coef=0.0, l2_coef=0.0):
         self.n_iter = n_iter
         self.learning_rate = learning_rate
         self.weights = weights
         self.metric = metric
+        self.reg = reg
+        self.l1_coef = l1_coef
+        self.l2_coef = l2_coef
 
         self.best_score = None
 
@@ -86,17 +89,39 @@ class MyLogReg():
 
             loss = self.compute_log_loss(y, y_hat)
 
+            if self.reg:
+                if self.reg == "l1":
+                    reg_loss = self.l1_coef * np.sum(np.abs(self.weights))
+                elif self.reg == "l2":
+                    reg_loss = (self.l2_coef ** 2) * (np.sum(np.square(self.weights)))
+                elif self.reg == "elasticnet":
+                    reg_loss = (self.l1_coef * np.sum(np.abs(self.weights))) + (self.l2_coef ** 2) * (np.sum(np.square(self.weights)))
+                else:
+                    reg_loss = 0.0
+
+                total_loss = loss + reg_loss
+            else:
+                total_loss = loss
 
             if verbose and (i % verbose == 0):
                 if self.metric is not None:
                     metric_value = self.compute_metric(y, y_hat)
-                    print(f"{i if i > 0 else 'start'} | loss: {loss:.2f} | learning rate: {self.learning_rate} | {self.metric}: {metric_value}")
+                    print(f"{i if i > 0 else 'start'} | loss: {total_loss:.2f} | learning rate: {self.learning_rate} | {self.metric}: {metric_value}")
 
                 else:
-                    print(f"{i if i > 0 else 'start'} | loss: {loss:.2f} | learning rate: {self.learning_rate}")
+                    print(f"{i if i > 0 else 'start'} | loss: {total_loss:.2f} | learning rate: {self.learning_rate}")
 
             error = y_hat - y
             gradient = np.dot(error, X) / len(y)
+
+            if self.reg is not None:
+
+                if self.reg == "l1":
+                    gradient += self.l1_coef * np.sign(self.weights)
+                elif self.reg == "l2":
+                    gradient += 2 * self.l2_coef * self.weights
+                elif self.reg == "elasticnet":
+                    gradient += self.l1_coef * np.sign(self.weights) + 2 * self.l2_coef * self.weights
 
             self.weights -= self.learning_rate * gradient
 
@@ -105,9 +130,9 @@ class MyLogReg():
         if verbose:
             if self.metric is not None:
                 metric_value = self.compute_metric(y, y_hat)
-                print(f"final | loss: {loss:.2f} | learning rate: {self.learning_rate} | {self.metric}: {metric_value}")
+                print(f"final | loss: {total_loss:.2f} | learning rate: {self.learning_rate} | {self.metric}: {metric_value}")
             else:
-                print(f"final | loss: {loss:.2f} | learning rate: {self.learning_rate}")
+                print(f"final | loss: {total_loss:.2f} | learning rate: {self.learning_rate}")
 
         self.best_score = self.compute_metric(y, y_hat)
 
@@ -128,6 +153,7 @@ class MyLogReg():
         return self.best_score
 
 
+
 from sklearn.datasets import make_classification
 
 X, y = make_classification(n_samples=1000, n_features=14, n_informative=10, random_state=42)
@@ -137,7 +163,7 @@ X.columns = [f'col_{col}' for col in X.columns]
 
 
 
-model = MyLogReg(n_iter=200, learning_rate=0.1, metric="roc_auc")
+model = MyLogReg(n_iter=100, learning_rate=0.1, metric="roc_auc", reg="l1", l1_coef=.1, l2_coef=.1)
 
 print(model)
 

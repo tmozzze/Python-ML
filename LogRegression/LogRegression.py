@@ -1,10 +1,12 @@
+import random
+
 import numpy
 import numpy as np
 import pandas as pd
 
 class MyLogReg():
 
-    def __init__(self, n_iter=10, learning_rate=0.1, weights=None, metric=None, reg=None, l1_coef=0.0, l2_coef=0.0):
+    def __init__(self, n_iter=10, learning_rate=0.1, weights=None, metric=None, reg=None, l1_coef=0.0, l2_coef=0.0, sgd_sample=None, random_state=42):
         self.n_iter = n_iter
         self.learning_rate = learning_rate
         self.weights = weights
@@ -12,6 +14,8 @@ class MyLogReg():
         self.reg = reg
         self.l1_coef = l1_coef
         self.l2_coef = l2_coef
+        self.sgd_sample = sgd_sample
+        self.random_state = random_state
 
         self.best_score = None
 
@@ -78,6 +82,8 @@ class MyLogReg():
 
 
     def fit(self, X, y, verbose=False):
+        random.seed(self.random_state)
+
         X = np.c_[np.ones(X.shape[0]), X]
 
         self.weights = np.ones(X.shape[1])
@@ -90,7 +96,25 @@ class MyLogReg():
             else:
                 lr = self.learning_rate
 
+            if self.sgd_sample is not None:
+                if isinstance(self.sgd_sample, float) and (0.0 < self.sgd_sample <= 1.0):
+                    sgd_sample_size = int(self.sgd_sample * X.shape[0])
+                elif isinstance(self.sgd_sample, int) and (self.sgd_sample > 0):
+                    sgd_sample_size = self.sgd_sample
+                else:
+                    raise ValueError("sgd_sample should be a positive or a float between 0.0 to 1.0")
+
+                sample_rows_idx = random.sample(range(X.shape[0]), sgd_sample_size)
+                X_sample = X[sample_rows_idx]
+                y_sample = y.iloc[sample_rows_idx]
+
+            else:
+                X_sample = X
+                y_sample = y
+
+
             y_hat = self.sigmoid(np.dot(X, self.weights))
+            y_sample_hat = self.sigmoid(np.dot(X_sample, self.weights))
 
             loss = self.compute_log_loss(y, y_hat)
 
@@ -116,8 +140,8 @@ class MyLogReg():
                 else:
                     print(f"{i if i > 0 else 'start'} | loss: {total_loss:.2f} | learning rate: {lr:.6f}")
 
-            error = y_hat - y
-            gradient = np.dot(error, X) / len(y)
+            error_sample = y_sample_hat - y_sample
+            gradient = np.dot(error_sample, X_sample) / len(y_sample)
 
             if self.reg is not None:
 
@@ -169,7 +193,7 @@ X.columns = [f'col_{col}' for col in X.columns]
 lr_fuction = lambda iter: 0.5 * (0.85 ** iter)
 
 
-model = MyLogReg(n_iter=100, learning_rate=lr_fuction, metric="roc_auc", reg="l1", l1_coef=.1, l2_coef=.1)
+model = MyLogReg(n_iter=100, learning_rate=lr_fuction, metric="roc_auc", reg="l1", l1_coef=.1, l2_coef=.1, sgd_sample=.2)
 
 print(model)
 

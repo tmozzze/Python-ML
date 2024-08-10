@@ -3,12 +3,13 @@ import pandas as pd
 
 
 class MyKNNClf():
-    def __init__(self, k=3, metric="euclidean"):
+    def __init__(self, k=3, metric="euclidean", weight="uniform"):
         self.k = k
         self.train_size = None
         self.X_train = None
         self.y_train = None
         self.metric = metric
+        self.weight = weight
 
     def __str__(self):
         components = self.__dict__
@@ -21,37 +22,62 @@ class MyKNNClf():
         self.y_train = y_train.copy()
         self.train_size = X.shape
 
-    def _euclidean_proba(self, row: pd.Series):
-        k_sorted_idx = (row - self.X_train).pow(2).sum(axis=1).pow(.5).sort_values().head(self.k).index
-        return self.y_train[k_sorted_idx].mean()
+    def _euclidean_distance(self, row: pd.Series):
+        distance = (row - self.X_train).pow(2).sum(axis=1).pow(.5)
+        return distance
 
-    def _chebyshev_proba(self, row: pd.Series):
-        k_sorted_idx = (row - self.X_train).abs().max(axis=1).sort_values().head(self.k).index
-        return self.y_train[k_sorted_idx].mean()
+    def _chebyshev_distance(self, row: pd.Series):
+        distance = (row - self.X_train).abs().max(axis=1)
+        return distance
 
-    def _manhattan_proba(self, row: pd.Series):
-        k_sorted_idx = (row - self.X_train).abs().sum(axis=1).sort_values().head(self.k).index
-        return self.y_train[k_sorted_idx].mean()
+    def _manhattan_distance(self, row: pd.Series):
+        distance = (row - self.X_train).abs().sum(axis=1)
+        return distance
 
-    def _cosine_proba(self, row: pd.Series):
-        k_sorted_idx = np.argsort(1 - (np.dot(self.X_train, row) / (np.linalg.norm(self.X_train, axis=1) * (np.linalg.norm(row)))))[:self.k]
-        return self.y_train.iloc[k_sorted_idx].mean()
+    def _cosine_distance(self, row: pd.Series):
+        cosine_similarity = np.dot(self.X_train, row) / (np.linalg.norm(self.X_train, axis=1) * (np.linalg.norm(row)))
+        distance = 1 - cosine_similarity
+        return pd.Series(distance, index=self.X_train.index)
+
+    def _get_weights(self, distances):
+        if self.weight == "uniform":
+            return np.ones_like(distances)
+        elif self.weight == "rank":
+            ranks = np.argsort(np.argsort(distances))
+            return 1 / (ranks + 1)
+        elif self.weight == "distance":
+            return 1 / (distances + 1e-10)
+        else:
+            raise ValueError("Unsupported weight type: {}".format(self.weight))
 
     def _predict_proba(self, row: pd.Series):
         if self.metric == "euclidean":
-            return self._euclidean_proba(row)
-        if self.metric == "chebyshev":
-            return self._chebyshev_proba(row)
-        if self.metric == "manhattan":
-            return self._manhattan_proba(row)
-        if self.metric == "cosine":
-            return self._cosine_proba(row)
+            distances = self._euclidean_distance(row)
+        elif self.metric == "chebyshev":
+            distances = self._chebyshev_distance(row)
+        elif self.metric == "manhattan":
+            distances = self._manhattan_distance(row)
+        elif self.metric == "cosine":
+            distances = self._cosine_distance(row)
         else:
             raise ValueError("Unsupported metric: {}".format(self.metric))
 
+        k_sorted_idx = distances.sort_values().head(self.k).index
+        nearest_distances = distances.iloc[k_sorted_idx]
+        nearest_labels = self.y_train.iloc[k_sorted_idx]
+        weights = self._get_weights(nearest_distances)
+
+        weighted_sum = np.sum(weights * (nearest_labels == 1))
+        total_weight = np.sum(weights)
+
+        probability = weighted_sum / total_weight
+
+        return probability
+
+
     def _predict(self, row: pd.Series):
-        mean = self._predict_proba(row)
-        return 1 if mean >= 0.5 else 0
+        probability = self._predict_proba(row)
+        return 1 if probability >= 0.5 else 0
 
     def predict_proba(self, X_test: pd.DataFrame):
         probabilities = X_test.apply(self._predict_proba, axis=1)
@@ -72,7 +98,7 @@ X = pd.DataFrame(X)
 y = pd.Series(y)
 X.columns = [f'col_{col}' for col in X.columns]
 
-model = MyKNNClf(k=5, metric="cosine")
+model = MyKNNClf(k=5, metric="cosine", weight="distance")
 print(model)
 model.fit(X, y)
 print(model)

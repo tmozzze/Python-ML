@@ -3,12 +3,13 @@ import numpy as np
 
 class MyKNNReg():
 
-    def __init__(self, k=3, metric="euclidean"):
+    def __init__(self, k=3, metric="euclidean", weight="uniform"):
         self.k = k
         self.train_size = None
         self.X_train = None
         self.y_train = None
         self.metric = metric
+        self.weight = weight
 
     def __str__(self):
         components = self.__dict__
@@ -38,6 +39,14 @@ class MyKNNReg():
         distance = 1 - cosine_similarity
         return pd.Series(distance, index=self.X_train.index)
 
+    def _get_weights(self, distances):
+        if self.weight == "uniform":
+            return np.ones_like(distances)
+        elif self.weight == "rank":
+            ranks = np.argsort(np.argsort(distances))
+            return 1 / (ranks + 1)
+        elif self.weight == "distance":
+            return 1 / distances
 
 
     def _predict(self, row: pd.Series):
@@ -53,9 +62,16 @@ class MyKNNReg():
             raise ValueError("Unsupported metric: {}".format(self.metric))
 
         k_sorted_idx = distances.sort_values().head(self.k).index
+        nearest_distances = distances[k_sorted_idx]
         nearest_labels = self.y_train.iloc[k_sorted_idx]
+        if self.weight == "uniform":
+            y_pred = nearest_labels.mean()
+        elif self.weight == "rank" or self.weight == "distance":
+            weights = self._get_weights(nearest_distances)
+            y_pred = (weights * nearest_labels).sum() / weights.sum()
 
-        return nearest_labels.mean()
+
+        return y_pred
 
 
 
@@ -72,7 +88,7 @@ X = pd.DataFrame(X)
 y = pd.Series(y)
 X.columns = [f'col_{col}' for col in X.columns]
 
-model = MyKNNReg(k=5, metric="cosine")
+model = MyKNNReg(k=5, metric="cosine", weight="distance")
 model.fit(X, y)
 
 print(model)
